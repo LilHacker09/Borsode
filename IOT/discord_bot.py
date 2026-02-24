@@ -1,7 +1,7 @@
 import requests
 import json
 
-WEBHOOK_URL = "https://discord.com/api/webhooks/1475884677998055435/btZhq0onrvV1ilt7QEySidF6V69WGsUuyLuTabnI-PE0c80QzrKallnc8gukJS6uqURI"
+WEBHOOK_URL = ""
 
 def send_status_update(tracking_number, old_status, new_status):
     embed = {
@@ -24,3 +24,4 @@ def send_qos_graph(image_path, average_latency):
                 "content": f"📊 **QoS Napi Jelentés**\nÁtlagos válaszidő: {average_latency:.2f} ms"
             })}
         )
+
