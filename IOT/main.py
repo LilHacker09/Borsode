@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from database import engine, SessionLocal, Base
 import models, discord_bot
@@ -8,6 +9,11 @@ from pydantic import BaseModel
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Borsode CsomagPont API", version="1.0.PLUS_ULTRA")
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/docs")
+
 
 # Pydantic sémák az adatok validálásához
 class PackageCreate(BaseModel):
