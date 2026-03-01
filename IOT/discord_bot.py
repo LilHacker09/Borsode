@@ -6,7 +6,7 @@ WEBHOOK_URL = "https://discord.com/api/webhooks/1475884677998055435/btZhq0onrvV1
 def send_status_update(tracking_number, old_status, new_status):
     embed = {
         "title": f"📦 Csomag státusz frissítés: {tracking_number}",
-        "color": 3066993, # Zöldes szín
+        "color": 3066993,
         "fields": [
             {"name": "Korábbi státusz", "value": old_status, "inline": True},
             {"name": "Új státusz", "value": f"**{new_status}**", "inline": True}
@@ -16,7 +16,6 @@ def send_status_update(tracking_number, old_status, new_status):
 
 def send_qos_graph(image_path, average_latency):
     with open(image_path, "rb") as f:
-        # Fájl küldése webhookon keresztül
         requests.post(
             WEBHOOK_URL,
             files={"file": (image_path, f, "image/png")},

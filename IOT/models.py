@@ -6,7 +6,7 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
-    role = Column(String, default="user") # pl: admin, futar, user
+    role = Column(String, default="user")
 
 class Package(Base):
     __tablename__ = "packages"
