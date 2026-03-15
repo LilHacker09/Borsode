@@ -1,62 +1,98 @@
 import time
-from ping3 import ping
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-from database import SessionLocal
-import models
-import discord_bot
+import requests
+from netmiko import ConnectHandler
+import datetime
 
-TARGET_IP = "8.8.8.8"
+# --- BEÁLLÍTÁSOK ---
 
-def measure_qos():
-    db = SessionLocal()
-    latency = ping(TARGET_IP, unit='ms')
+# 1. Cisco Sandbox adatok
+CISCO_ROUTER = {
+    'device_type': 'cisco_ios_telnet',  # <-- EZ A LÉNYEG: SSH helyett Telnet
+    'host': '172.16.1.200',
+    'username': 'developer', 
+    'password': 'C1sco12345',
+    'port': 23,                         # <-- Telnet port (23)
+}
+
+
+
+
+
+
+# 2. A Discord Webhookod URL-je 
+# KÉRLEK, EBBEN A SORBAN ÍRD ÁT A WEBHOOKODAT:
+WEBHOOK_URL = "https://discord.com/api/webhooks/1475884677998055435/btZhq0onrvV1ilt7QEySidF6V69WGsUuyLuTabnI-PE0c80QzrKallnc8gukJS6uqURI"
+
+
+def send_discord_alert(interface_name, status, errors):
+    """Embed üzenet küldése Discordra a webhookon keresztül"""
     
-    if latency is None:
-        latency = 0.0
-
-    log = models.QoSLog(target_ip=TARGET_IP, latency_ms=latency)
-    db.add(log)
-    db.commit()
-    db.close()
-    return latency
-
-def generate_and_send_graph():
-    db = SessionLocal()
-    logs = db.query(models.QoSLog).order_by(models.QoSLog.timestamp.desc()).limit(50).all()
-    db.close()
-
-    logs.reverse()
+    color = 15158332 if status == "down" or errors > 0 else 3066993
     
-    times = [log.timestamp for log in logs]
-    latencies = [log.latency_ms for log in logs]
-    avg_lat = sum(latencies) / len(latencies) if latencies else 0
-
-
-    plt.figure(figsize=(10, 5))
-    plt.plot(times, latencies, marker='o', linestyle='-', color='b', label='Késleltetés (ms)')
+    embed = {
+        "title": f"⚠️ Hálózati Interfész Riasztás: {interface_name}",
+        "description": "A Borsode CsomagPont központi routere hálózati anomáliát észlelt!",
+        "color": color,
+        "fields": [
+            {"name": "Állapot (Status)", "value": status.upper(), "inline": True},
+            {"name": "Hibák (Input Errors)", "value": str(errors), "inline": True},
+            {"name": "Időpont", "value": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "inline": False}
+        ],
+        "footer": {"text": "Powered by Netmiko & Cisco DevNet"}
+    }
     
-    plt.title('Hálózati Minőség (QoS) Monitor')
-    plt.xlabel('Idő')
-    plt.ylabel('Késleltetés (ms)')
-    plt.grid(True)
-    plt.legend()
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-    plt.gcf().autofmt_xdate() 
+    try:
+        requests.post(WEBHOOK_URL, json={"embeds": [embed]})
+        print(f"Riasztás kiküldve: {interface_name}")
+    except Exception as e:
+        print(f"Nem sikerült a Discord üzenet küldése: {e}")
 
+def check_router_interfaces():
+    print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Kapcsolódás a Cisco Sandbox routerhez SSH-n keresztül...")
+    
+    try:
+        net_connect = ConnectHandler(**CISCO_ROUTER)
+        
+        parancs = 'show ip interface brief'
+        print(f"Parancs futtatása: {parancs}")
+        kimenet = net_connect.send_command(parancs)
+        
+        sorok = kimenet.split('\n')
+        
+        for sor in sorok[1:]:
+            if not sor.strip():
+                continue
+                
+            adatok = sor.split()
+            if len(adatok) >= 6:
+                int_name = adatok[0]
+                status = adatok[4]
+                
+                if "Gigabit" in int_name or "Loopback" in int_name:
+                    print(f"Vizsgálat alatt: {int_name} - Állapot: {status}")
+                    
+                    if status != "up":
+                        send_discord_alert(int_name, status, 0)
+                        
+                    else:
+                        detail_cmd = f"show interface {int_name} | include errors"
+                        detail_out = net_connect.send_command(detail_cmd)
+                        
+                        errors = 0
+                        if "input errors" in detail_out:
+                            try:
+                                errors = int(detail_out.split("input errors")[0].split()[-1])
+                            except:
+                                pass
+                                
+                        if errors > 0:
+                            send_discord_alert(int_name, "up (De hibás!)", errors)
 
-    image_path = "qos_graph.png"
-    plt.savefig(image_path)
-    plt.close()
+        print("Lekérdezés befejezve, kapcsolat lezárása.")
+        net_connect.disconnect()
 
-    # Beküldés Discordra
-    discord_bot.send_qos_graph(image_path, avg_lat)
+    except Exception as e:
+        print(f"Hiba a kapcsolódás vagy a futtatás során: {e}")
 
 if __name__ == "__main__":
-    
-    for _ in range(5):
-        measure_qos()
-        time.sleep(1)
-    
-    generate_and_send_graph()
-    print("Mérés és grafikon elküldve!")
+    check_router_interfaces()
